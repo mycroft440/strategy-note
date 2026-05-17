@@ -1,0 +1,18 @@
+.gradle
+/build
+!/gradle/wrapper/gradle-wrapper.jar
+!/gradle/wrapper/gradle-wrapper.properties
+
+### Android Studio ###
+*.iml
+.idea
+.ag-agent
+__pycache__
+*.pyc
+local.properties
+.DS_Store
+/captures
+.externalNativeBuild
+.cxx
+/web/build
+.navigation

@@ -1,0 +1,264 @@
+package com.strategy.note.ui.screen
+
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.strategy.note.R
+import com.strategy.note.data.Note
+import com.strategy.note.data.NoteType
+import com.strategy.note.ui.theme.NoteColors
+import com.strategy.note.ui.theme.getNoteColor
+import com.strategy.note.viewmodel.NoteViewModel
+import java.text.SimpleDateFormat
+import java.util.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TextEditorScreen(
+    noteId: Int,
+    viewModel: NoteViewModel,
+    onNavigateBack: () -> Unit
+) {
+    val context = LocalContext.current
+    var title by remember { mutableStateOf("") }
+    var content by remember { mutableStateOf("") }
+    var colorCode by remember { mutableStateOf(NoteColors[2].toArgb().toLong()) }
+    var reminderTime by remember { mutableStateOf<Long?>(null) }
+    var isLoaded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(noteId) {
+        if (noteId > 0 && !isLoaded) {
+            val note = viewModel.allNotes.value.find { it.id == noteId }
+            if (note != null) {
+                title = note.title
+                content = note.content
+                colorCode = note.colorCode
+                reminderTime = note.reminderTime
+            }
+            isLoaded = true
+        } else {
+            isLoaded = true
+        }
+    }
+
+    val saveCurrentNote = {
+        if (title.isNotEmpty() || content.isNotEmpty()) {
+            val note = Note(
+                id = if (noteId > 0) noteId else 0,
+                title = title,
+                content = content,
+                type = NoteType.TEXT.value,
+                colorCode = colorCode,
+                reminderTime = reminderTime,
+                modifiedAt = System.currentTimeMillis()
+            )
+            viewModel.saveNote(context, note)
+        }
+    }
+
+    var showColorDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = if (noteId > 0) "Edit Note" else "New Note",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        saveCurrentNote()
+                        onNavigateBack()
+                    }) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showColorDialog = true }) {
+                        Icon(imageVector = Icons.Default.Palette, contentDescription = "Change Color")
+                    }
+                    IconButton(onClick = {
+                        showDateTimePicker(context) { selectedTime ->
+                            reminderTime = selectedTime
+                        }
+                    }) {
+                        Icon(imageVector = Icons.Default.Alarm, contentDescription = "Set Reminder")
+                    }
+                    if (noteId > 0) {
+                        IconButton(onClick = {
+                            val note = viewModel.allNotes.value.find { it.id == noteId }
+                            if (note != null) {
+                                viewModel.deleteNote(context, note)
+                                onNavigateBack()
+                            }
+                        }) {
+                            Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = getNoteColor(colorCode)
+                )
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(getNoteColor(colorCode))
+                .padding(16.dp)
+        ) {
+            if (reminderTime != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.05f))
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.NotificationsActive,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.Black.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            text = "Reminder: " + SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(reminderTime!!)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.Black.copy(alpha = 0.7f)
+                        )
+                    }
+                    IconButton(
+                        onClick = { reminderTime = null },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancel Reminder",
+                            tint = Color.Black.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            TextField(
+                value = title,
+                onValueChange = { title = it },
+                placeholder = { Text(stringResource(R.string.title_hint), color = Color.Black.copy(alpha = 0.4f)) },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.Black),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                )
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            TextField(
+                value = content,
+                onValueChange = { content = it },
+                placeholder = { Text(stringResource(R.string.content_hint), color = Color.Black.copy(alpha = 0.4f)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                )
+            )
+        }
+
+        if (showColorDialog) {
+            AlertDialog(
+                onDismissRequest = { showColorDialog = false },
+                title = { Text("Choose Pastel Color") },
+                text = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        NoteColors.forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                                    .clickable {
+                                        colorCode = color.toArgb().toLong()
+                                        showColorDialog = false
+                                    }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+    }
+}
+
+fun showDateTimePicker(context: Context, onDateTimeSelected: (Long) -> Unit) {
+    val currentCalendar = Calendar.getInstance()
+    DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            val selectedCalendar = Calendar.getInstance()
+            selectedCalendar.set(Calendar.YEAR, year)
+            selectedCalendar.set(Calendar.MONTH, month)
+            selectedCalendar.set(Calendar.DAY_OF_MONTH, dayOfMonth)
+
+            TimePickerDialog(
+                context,
+                { _, hourOfDay, minute ->
+                    selectedCalendar.set(Calendar.HOUR_OF_DAY, hourOfDay)
+                    selectedCalendar.set(Calendar.MINUTE, minute)
+                    selectedCalendar.set(Calendar.SECOND, 0)
+                    selectedCalendar.set(Calendar.MILLISECOND, 0)
+
+                    onDateTimeSelected(selectedCalendar.timeInMillis)
+                },
+                currentCalendar.get(Calendar.HOUR_OF_DAY),
+                currentCalendar.get(Calendar.MINUTE),
+                true
+            ).show()
+        },
+        currentCalendar.get(Calendar.YEAR),
+        currentCalendar.get(Calendar.MONTH),
+        currentCalendar.get(Calendar.DAY_OF_MONTH)
+    ).show()
+}
