@@ -62,14 +62,6 @@ fun HomeScreen(
                         style = MaterialTheme.typography.titleLarge
                     )
                 },
-                actions = {
-                    IconButton(onClick = { isGridView = !isGridView }) {
-                        Icon(
-                            imageVector = if (isGridView) Icons.Default.List else Icons.Default.GridView,
-                            contentDescription = "Toggle View"
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
                 )
@@ -125,7 +117,11 @@ fun HomeScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = stringResource(R.string.empty_notes),
+                        text = if (searchQuery.isNotEmpty()) {
+                            stringResource(R.string.no_results)
+                        } else {
+                            stringResource(R.string.empty_notes)
+                        },
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )

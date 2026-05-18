@@ -22,11 +22,18 @@ class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
     private val _selectedColorFilter = MutableStateFlow<Long?>(null)
     val selectedColorFilter: StateFlow<Long?> = _selectedColorFilter.asStateFlow()
 
-    val filteredNotes: StateFlow<List<Note>> = combine(allNotes, _searchQuery, _selectedColorFilter) { notes, query, color ->
-        notes.filter { note ->
-            val matchesQuery = note.title.contains(query, ignoreCase = true) || note.content.contains(query, ignoreCase = true)
-            val matchesColor = color == null || note.colorCode == color
-            matchesQuery && matchesColor
+        val filteredNotes: StateFlow<List<Note>> = combine(allNotes, _searchQuery, _selectedColorFilter) { notes, query, color ->
+        val filtered = notes.filter { note -> color == null || note.colorCode == color }
+        if (query.isEmpty()) {
+            filtered
+        } else {
+            val titleMatches = filtered.filter { note ->
+                note.title.contains(query, ignoreCase = true)
+            }
+            val contentMatches = filtered.filter { note ->
+                note.content.contains(query, ignoreCase = true) && !note.title.contains(query, ignoreCase = true)
+            }
+            titleMatches + contentMatches
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
