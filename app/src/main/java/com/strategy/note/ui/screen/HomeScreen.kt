@@ -36,7 +36,11 @@ import com.strategy.note.ui.theme.getNoteColor
 import com.strategy.note.ui.theme.getDarkNoteCardColor
 import com.strategy.note.ui.theme.getDarkNoteAccentColor
 import com.strategy.note.ui.theme.DarkOnSurface
+import com.strategy.note.ui.theme.DarkOnSurfaceVariant
+import com.strategy.note.ui.theme.DarkSurface
 import com.strategy.note.viewmodel.NoteViewModel
+import com.strategy.note.data.Notebook
+import android.preference.PreferenceManager
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -51,16 +55,61 @@ fun HomeScreen(
 
     var isGridView by remember { mutableStateOf(true) }
     var showAddNoteDialog by remember { mutableStateOf(false) }
+    var showNotebookDrawer by remember { mutableStateOf(false) }
+    var showCreateNotebookDialog by remember { mutableStateOf(false) }
+    var showRenameNotebookDialog by remember { mutableStateOf(false) }
+    var renameTarget by remember { mutableStateOf<Notebook?>(null) }
+    var newNotebookName by remember { mutableStateOf("") }
+    var showAppSettingsDialog by remember { mutableStateOf(false) }
+
+    val notebooks by viewModel.allNotebooks.collectAsState()
+    val selectedNotebookId by viewModel.selectedNotebookId.collectAsState()
+    val prefs = remember { PreferenceManager.getDefaultSharedPreferences(context) }
+
+    LaunchedEffect(Unit) {
+        if (viewModel.isAutoOpenLastNotebook(prefs)) {
+            val lastId = viewModel.getLastNotebookId(prefs)
+            if (lastId > 0) {
+                viewModel.selectNotebook(lastId)
+            }
+        }
+    }
+
+    LaunchedEffect(selectedNotebookId) {
+        if (selectedNotebookId > 0) {
+            viewModel.saveLastNotebookId(prefs, selectedNotebookId)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = stringResource(R.string.app_name),
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    val selectedNotebook = notebooks.find { it.id == selectedNotebookId }
+                    Column {
+                        Text(
+                            text = stringResource(R.string.app_name),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        if (selectedNotebook != null) {
+                            Text(
+                                text = selectedNotebook.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = { showNotebookDrawer = true }) {
+                        Icon(imageVector = Icons.Default.MenuBook, contentDescription = "Cadernos")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showAppSettingsDialog = true }) {
+                        Icon(imageVector = Icons.Default.Settings, contentDescription = "Configurações")
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
@@ -232,6 +281,203 @@ fun HomeScreen(
                     }
                 },
                 confirmButton = {}
+            )
+        }
+
+        // Notebook Drawer Dialog
+        if (showNotebookDrawer) {
+            AlertDialog(
+                onDismissRequest = { showNotebookDrawer = false },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Cadernos", fontWeight = FontWeight.Bold)
+                        IconButton(onClick = { showCreateNotebookDialog = true }) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Novo Caderno")
+                        }
+                    }
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // "All Notes" option
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (selectedNotebookId == 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
+                                .clickable {
+                                    viewModel.selectNotebook(0)
+                                    showNotebookDrawer = false
+                                }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text("Todas as Notas", fontWeight = if (selectedNotebookId == 0) FontWeight.Bold else FontWeight.Normal)
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        notebooks.forEach { notebook ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (selectedNotebookId == notebook.id) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
+                                    .clickable {
+                                        viewModel.selectNotebook(notebook.id)
+                                        showNotebookDrawer = false
+                                    }
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(imageVector = Icons.Default.Book, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Text(notebook.name, fontWeight = if (selectedNotebookId == notebook.id) FontWeight.Bold else FontWeight.Normal)
+                                }
+                                Row {
+                                    IconButton(onClick = {
+                                        renameTarget = notebook
+                                        newNotebookName = notebook.name
+                                        showRenameNotebookDialog = true
+                                    }, modifier = Modifier.size(28.dp)) {
+                                        Icon(imageVector = Icons.Default.Edit, contentDescription = "Renomear", modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(onClick = {
+                                        viewModel.deleteNotebook(notebook)
+                                        if (selectedNotebookId == notebook.id) {
+                                            viewModel.selectNotebook(0)
+                                        }
+                                    }, modifier = Modifier.size(28.dp)) {
+                                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Excluir", modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showNotebookDrawer = false }) {
+                        Text("Fechar")
+                    }
+                }
+            )
+        }
+
+        // Create Notebook Dialog
+        if (showCreateNotebookDialog) {
+            AlertDialog(
+                onDismissRequest = { showCreateNotebookDialog = false },
+                title = { Text("Novo Caderno", fontWeight = FontWeight.Bold) },
+                text = {
+                    OutlinedTextField(
+                        value = newNotebookName,
+                        onValueChange = { newNotebookName = it },
+                        placeholder = { Text("Nome do caderno") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (newNotebookName.isNotBlank()) {
+                            viewModel.createNotebook(newNotebookName.trim()) { id ->
+                                viewModel.selectNotebook(id)
+                            }
+                            newNotebookName = ""
+                            showCreateNotebookDialog = false
+                            showNotebookDrawer = false
+                        }
+                    }) {
+                        Text("Criar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCreateNotebookDialog = false; newNotebookName = "" }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        // Rename Notebook Dialog
+        if (showRenameNotebookDialog && renameTarget != null) {
+            AlertDialog(
+                onDismissRequest = { showRenameNotebookDialog = false },
+                title = { Text("Renomear Caderno", fontWeight = FontWeight.Bold) },
+                text = {
+                    OutlinedTextField(
+                        value = newNotebookName,
+                        onValueChange = { newNotebookName = it },
+                        placeholder = { Text("Novo nome") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        if (newNotebookName.isNotBlank()) {
+                            viewModel.renameNotebook(renameTarget!!, newNotebookName.trim())
+                            newNotebookName = ""
+                            showRenameNotebookDialog = false
+                        }
+                    }) {
+                        Text("Salvar")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRenameNotebookDialog = false; newNotebookName = "" }) {
+                        Text("Cancelar")
+                    }
+                }
+            )
+        }
+
+        // App Settings Dialog
+        if (showAppSettingsDialog) {
+            var autoOpen by remember { mutableStateOf(viewModel.isAutoOpenLastNotebook(prefs)) }
+            AlertDialog(
+                onDismissRequest = { showAppSettingsDialog = false },
+                title = { Text("Configurações", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Sempre abrir no último caderno",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Switch(
+                                checked = autoOpen,
+                                onCheckedChange = {
+                                    autoOpen = it
+                                    viewModel.setAutoOpenLastNotebook(prefs, it)
+                                }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showAppSettingsDialog = false }) {
+                        Text("Fechar")
+                    }
+                }
             )
         }
     }

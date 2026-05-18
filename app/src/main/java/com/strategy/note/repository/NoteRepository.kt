@@ -3,6 +3,7 @@ package com.strategy.note.repository
 import com.strategy.note.data.Note
 import com.strategy.note.data.ChecklistItem
 import com.strategy.note.data.NoteDao
+import com.strategy.note.data.Notebook
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -47,5 +48,23 @@ class NoteRepository(private val noteDao: NoteDao) {
         noteDao.deleteChecklistItemsForNote(noteId)
         val itemsWithCorrectId = items.map { it.copy(noteId = noteId) }
         noteDao.insertChecklistItems(itemsWithCorrectId)
+    }
+
+    val allNotebooksFlow: Flow<List<Notebook>> = noteDao.getAllNotebooksFlow()
+
+    suspend fun insertNotebook(notebook: Notebook): Int = withContext(Dispatchers.IO) {
+        noteDao.insertNotebook(notebook).toInt()
+    }
+
+    suspend fun deleteNotebook(notebook: Notebook) = withContext(Dispatchers.IO) {
+        noteDao.deleteNotebook(notebook)
+    }
+
+    fun getNotesByNotebookFlow(notebookId: Int): Flow<List<Note>> {
+        return noteDao.getNotesByNotebookFlow(notebookId)
+    }
+
+    suspend fun moveNoteToNotebook(noteId: Int, notebookId: Int) = withContext(Dispatchers.IO) {
+        noteDao.moveNoteToNotebook(noteId, notebookId)
     }
 }

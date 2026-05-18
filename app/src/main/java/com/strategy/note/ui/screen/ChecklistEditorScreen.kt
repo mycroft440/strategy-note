@@ -101,7 +101,8 @@ fun ChecklistEditorScreen(
                 type = NoteType.CHECKLIST.value,
                 colorCode = colorCode,
                 reminderTime = reminderTime,
-                modifiedAt = System.currentTimeMillis()
+                modifiedAt = System.currentTimeMillis(),
+                notebookId = viewModel.selectedNotebookId.value
             )
             viewModel.saveNote(context, note, checklistItems.toList()) { insertedId ->
                 currentNoteId = insertedId
@@ -129,7 +130,8 @@ fun ChecklistEditorScreen(
                 type = NoteType.CHECKLIST.value,
                 colorCode = colorCode,
                 reminderTime = reminderTime,
-                modifiedAt = System.currentTimeMillis()
+                modifiedAt = System.currentTimeMillis(),
+                notebookId = viewModel.selectedNotebookId.value
             )
             viewModel.saveNote(context, note, checklistItems.toList()) { insertedId ->
                 currentNoteId = insertedId

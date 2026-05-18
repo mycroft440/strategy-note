@@ -5,12 +5,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.strategy.note.data.Note
 import com.strategy.note.data.ChecklistItem
+import com.strategy.note.data.Notebook
+import android.content.SharedPreferences
 import com.strategy.note.repository.NoteRepository
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import android.content.Context
 import com.strategy.note.receiver.AlarmScheduler
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
 
     val allNotes: StateFlow<List<Note>> = repository.allNotesFlow
@@ -22,7 +26,18 @@ class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
     private val _selectedColorFilter = MutableStateFlow<Long?>(null)
     val selectedColorFilter: StateFlow<Long?> = _selectedColorFilter.asStateFlow()
 
-        val filteredNotes: StateFlow<List<Note>> = combine(allNotes, _searchQuery, _selectedColorFilter) { notes, query, color ->
+    val allNotebooks: StateFlow<List<Notebook>> = repository.allNotebooksFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedNotebookId = MutableStateFlow(0)
+    val selectedNotebookId: StateFlow<Int> = _selectedNotebookId.asStateFlow()
+
+    val notesByNotebook: StateFlow<List<Note>> = _selectedNotebookId.flatMapLatest { nbId ->
+        if (nbId > 0) repository.getNotesByNotebookFlow(nbId)
+        else repository.allNotesFlow
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+        val filteredNotes: StateFlow<List<Note>> = combine(notesByNotebook, _searchQuery, _selectedColorFilter) { notes, query, color ->
         val filtered = notes.filter { note -> color == null || note.colorCode == color }
         if (query.isEmpty()) {
             filtered
@@ -107,6 +122,46 @@ class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
         viewModelScope.launch {
             repository.deleteRelation(parentId, childId)
         }
+    }
+
+    fun selectNotebook(notebookId: Int) {
+        _selectedNotebookId.value = notebookId
+    }
+
+    fun createNotebook(name: String, onComplete: (Int) -> Unit = {}) {
+        viewModelScope.launch {
+            val notebook = Notebook(name = name)
+            val id = repository.insertNotebook(notebook)
+            onComplete(id)
+        }
+    }
+
+    fun renameNotebook(notebook: Notebook, newName: String) {
+        viewModelScope.launch {
+            repository.insertNotebook(notebook.copy(name = newName, modifiedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun deleteNotebook(notebook: Notebook) {
+        viewModelScope.launch {
+            repository.deleteNotebook(notebook)
+        }
+    }
+
+    fun saveLastNotebookId(prefs: SharedPreferences, notebookId: Int) {
+        prefs.edit().putInt("last_notebook_id", notebookId).apply()
+    }
+
+    fun getLastNotebookId(prefs: SharedPreferences): Int {
+        return prefs.getInt("last_notebook_id", 0)
+    }
+
+    fun isAutoOpenLastNotebook(prefs: SharedPreferences): Boolean {
+        return prefs.getBoolean("auto_open_last_notebook", true)
+    }
+
+    fun setAutoOpenLastNotebook(prefs: SharedPreferences, enabled: Boolean) {
+        prefs.edit().putBoolean("auto_open_last_notebook", enabled).apply()
     }
 
     class Factory(private val repository: NoteRepository) : ViewModelProvider.Factory {

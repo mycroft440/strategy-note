@@ -23,7 +23,8 @@ data class Note(
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "modified_at") val modifiedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "reminder_time") val reminderTime: Long? = null,
-    @ColumnInfo(name = "is_locked") val isLocked: Boolean = false
+    @ColumnInfo(name = "is_locked") val isLocked: Boolean = false,
+    @ColumnInfo(name = "notebook_id") val notebookId: Int = 0
 )
 
 @Entity(tableName = "checklist_items")
@@ -42,4 +43,12 @@ data class ChecklistItem(
 data class NoteRelation(
     val parentId: Int,
     val childId: Int
+)
+
+@Entity(tableName = "notebooks")
+data class Notebook(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val name: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "modified_at") val modifiedAt: Long = System.currentTimeMillis()
 )

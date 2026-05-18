@@ -52,4 +52,19 @@ interface NoteDao {
 
     @Query("DELETE FROM note_relations WHERE parentId = :parentId OR childId = :parentId")
     suspend fun deleteRelationsForNote(parentId: Int)
+
+    @Query("SELECT * FROM notebooks ORDER BY modified_at DESC")
+    fun getAllNotebooksFlow(): Flow<List<Notebook>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertNotebook(notebook: Notebook): Long
+
+    @Delete
+    suspend fun deleteNotebook(notebook: Notebook)
+
+    @Query("SELECT * FROM notes WHERE notebook_id = :notebookId ORDER BY modified_at DESC")
+    fun getNotesByNotebookFlow(notebookId: Int): Flow<List<Note>>
+
+    @Query("UPDATE notes SET notebook_id = :notebookId WHERE id = :noteId")
+    suspend fun moveNoteToNotebook(noteId: Int, notebookId: Int)
 }

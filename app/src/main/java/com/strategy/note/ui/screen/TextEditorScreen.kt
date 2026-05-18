@@ -160,7 +160,8 @@ fun TextEditorScreen(
                 type = NoteType.TEXT.value,
                 colorCode = colorCode,
                 reminderTime = reminderTime,
-                modifiedAt = System.currentTimeMillis()
+                modifiedAt = System.currentTimeMillis(),
+                notebookId = viewModel.selectedNotebookId.value
             )
             viewModel.saveNote(context, note) { insertedId ->
                 currentNoteId = insertedId
@@ -189,7 +190,8 @@ fun TextEditorScreen(
                 type = NoteType.TEXT.value,
                 colorCode = colorCode,
                 reminderTime = reminderTime,
-                modifiedAt = System.currentTimeMillis()
+                modifiedAt = System.currentTimeMillis(),
+                notebookId = viewModel.selectedNotebookId.value
             )
             viewModel.saveNote(context, note) { insertedId ->
                 currentNoteId = insertedId
