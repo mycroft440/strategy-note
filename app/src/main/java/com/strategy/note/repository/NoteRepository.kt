@@ -19,7 +19,20 @@ class NoteRepository(private val noteDao: NoteDao) {
     }
 
     suspend fun deleteNote(note: Note) = withContext(Dispatchers.IO) {
+        noteDao.deleteRelationsForNote(note.id)
         noteDao.deleteNote(note)
+    }
+
+    fun getSubnotesFlow(parentId: Int): Flow<List<Note>> {
+        return noteDao.getSubnotesFlow(parentId)
+    }
+
+    suspend fun insertRelation(parentId: Int, childId: Int) = withContext(Dispatchers.IO) {
+        noteDao.insertRelation(com.strategy.note.data.NoteRelation(parentId, childId))
+    }
+
+    suspend fun deleteRelation(parentId: Int, childId: Int) = withContext(Dispatchers.IO) {
+        noteDao.deleteRelation(com.strategy.note.data.NoteRelation(parentId, childId))
     }
 
     fun getChecklistItemsFlow(noteId: Int): Flow<List<ChecklistItem>> {

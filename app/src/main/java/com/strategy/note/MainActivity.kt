@@ -68,7 +68,9 @@ fun StrategyNoteApp(viewModel: NoteViewModel) {
             TextEditorScreen(
                 noteId = noteId,
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToTextEditor = { id -> navController.navigate("text_editor/$id") },
+                onNavigateToChecklistEditor = { id -> navController.navigate("checklist_editor/$id") }
             )
         }
         composable(
@@ -79,7 +81,9 @@ fun StrategyNoteApp(viewModel: NoteViewModel) {
             ChecklistEditorScreen(
                 noteId = noteId,
                 viewModel = viewModel,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToTextEditor = { id -> navController.navigate("text_editor/$id") },
+                onNavigateToChecklistEditor = { id -> navController.navigate("checklist_editor/$id") }
             )
         }
     }

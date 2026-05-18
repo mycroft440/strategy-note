@@ -34,3 +34,12 @@ data class ChecklistItem(
     @ColumnInfo(name = "is_checked") val isChecked: Boolean = false,
     val position: Int = 0
 )
+
+@Entity(
+    tableName = "note_relations",
+    primaryKeys = ["parentId", "childId"]
+)
+data class NoteRelation(
+    val parentId: Int,
+    val childId: Int
+)

@@ -37,4 +37,19 @@ interface NoteDao {
 
     @Delete
     suspend fun deleteChecklistItem(item: ChecklistItem)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRelation(relation: NoteRelation)
+
+    @Delete
+    suspend fun deleteRelation(relation: NoteRelation)
+
+    @Query("SELECT notes.* FROM notes INNER JOIN note_relations ON notes.id = note_relations.childId WHERE note_relations.parentId = :parentId ORDER BY notes.modified_at DESC")
+    fun getSubnotesFlow(parentId: Int): Flow<List<Note>>
+
+    @Query("SELECT notes.* FROM notes INNER JOIN note_relations ON notes.id = note_relations.childId WHERE note_relations.parentId = :parentId ORDER BY notes.modified_at DESC")
+    suspend fun getSubnotes(parentId: Int): List<Note>
+
+    @Query("DELETE FROM note_relations WHERE parentId = :parentId OR childId = :parentId")
+    suspend fun deleteRelationsForNote(parentId: Int)
 }

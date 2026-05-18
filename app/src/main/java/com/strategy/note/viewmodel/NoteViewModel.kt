@@ -93,6 +93,22 @@ class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
         return repository.getChecklistItemsFlow(noteId)
     }
 
+    fun getSubnotes(parentId: Int): Flow<List<Note>> {
+        return repository.getSubnotesFlow(parentId)
+    }
+
+    fun linkSubnote(parentId: Int, childId: Int) {
+        viewModelScope.launch {
+            repository.insertRelation(parentId, childId)
+        }
+    }
+
+    fun unlinkSubnote(parentId: Int, childId: Int) {
+        viewModelScope.launch {
+            repository.deleteRelation(parentId, childId)
+        }
+    }
+
     class Factory(private val repository: NoteRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {

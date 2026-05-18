@@ -47,7 +47,9 @@ import kotlinx.coroutines.delay
 fun ChecklistEditorScreen(
     noteId: Int,
     viewModel: NoteViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToTextEditor: (Int) -> Unit = {},
+    onNavigateToChecklistEditor: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     var title by remember { mutableStateOf("") }
@@ -136,6 +138,8 @@ fun ChecklistEditorScreen(
     }
 
     var showColorDialog by remember { mutableStateOf(false) }
+    var showLinkSubnoteDialog by remember { mutableStateOf(false) }
+    val subnotes by viewModel.getSubnotes(currentNoteId).collectAsState(initial = emptyList())
 
     Scaffold(
         topBar = {
@@ -332,7 +336,233 @@ fun ChecklistEditorScreen(
                         }
                     }
                 }
+
+                if (currentNoteId > 0) {
+                    item {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Divider(color = DarkOnSurfaceVariant.copy(alpha = 0.2f), thickness = 1.dp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Subnotas Relacionadas",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = getDarkNoteAccentColor(colorCode)
+                            )
+                            IconButton(onClick = { showLinkSubnoteDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.AddCircle,
+                                    contentDescription = "Adicionar Subnota",
+                                    tint = getDarkNoteAccentColor(colorCode)
+                                )
+                            }
+                        }
+                    }
+                    
+                    if (subnotes.isEmpty()) {
+                        item {
+                            Text(
+                                text = "Nenhuma subnota vinculada. Toque no + para criar ou vincular uma!",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = DarkOnSurface.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    } else {
+                        items(subnotes.size) { index ->
+                            val subnote = subnotes[index]
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        if (subnote.type == NoteType.TEXT.value) {
+                                            onNavigateToTextEditor(subnote.id)
+                                        } else {
+                                            onNavigateToChecklistEditor(subnote.id)
+                                        }
+                                    },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = getDarkNoteCardColor(subnote.colorCode)
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = subnote.title.ifEmpty { "Sem Título" },
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            color = getDarkNoteAccentColor(subnote.colorCode)
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = if (subnote.type == NoteType.TEXT.value) "Nota de Texto" else "Checklist",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = DarkOnSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.unlinkSubnote(currentNoteId, subnote.id) },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LinkOff,
+                                            contentDescription = "Desvincular",
+                                            tint = DarkOnSurface.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
+        }
+
+        if (showLinkSubnoteDialog) {
+            val allNotesList by viewModel.allNotes.collectAsState()
+            val subnotesList by viewModel.getSubnotes(currentNoteId).collectAsState(initial = emptyList())
+            val childIds = subnotesList.map { it.id }.toSet()
+            val linkableNotes = allNotesList.filter { it.id != currentNoteId && !childIds.contains(it.id) }
+            
+            AlertDialog(
+                onDismissRequest = { showLinkSubnoteDialog = false },
+                title = {
+                    Text(
+                        text = "Adicionar Subnota",
+                        fontWeight = FontWeight.Bold,
+                        color = getDarkNoteAccentColor(colorCode)
+                    )
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Criar nova subnota vinculada:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkOnSurface.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val newNote = Note(
+                                        title = "",
+                                        type = NoteType.TEXT.value,
+                                        colorCode = colorCode,
+                                        modifiedAt = System.currentTimeMillis()
+                                    )
+                                    viewModel.saveNote(context, newNote) { insertedId ->
+                                        viewModel.linkSubnote(currentNoteId, insertedId)
+                                        showLinkSubnoteDialog = false
+                                        onNavigateToTextEditor(insertedId)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = getDarkNoteAccentColor(colorCode)
+                                )
+                            ) {
+                                Text("Nova Nota", color = Color.Black)
+                            }
+                            Button(
+                                onClick = {
+                                    val newNote = Note(
+                                        title = "",
+                                        type = NoteType.CHECKLIST.value,
+                                        colorCode = colorCode,
+                                        modifiedAt = System.currentTimeMillis()
+                                    )
+                                    viewModel.saveNote(context, newNote, emptyList()) { insertedId ->
+                                        viewModel.linkSubnote(currentNoteId, insertedId)
+                                        showLinkSubnoteDialog = false
+                                        onNavigateToChecklistEditor(insertedId)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = getDarkNoteAccentColor(colorCode)
+                                )
+                            ) {
+                                Text("Novo Checklist", color = Color.Black)
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Divider(color = DarkOnSurfaceVariant.copy(alpha = 0.2f))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Text(
+                            text = "Ou vincular nota existente:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkOnSurface.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        if (linkableNotes.isEmpty()) {
+                            Text(
+                                text = "Nenhuma outra nota disponível para vincular.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = DarkOnSurface.copy(alpha = 0.6f)
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 200.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                items(linkableNotes.size) { index ->
+                                    val linkable = linkableNotes[index]
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(getDarkNoteCardColor(linkable.colorCode))
+                                            .clickable {
+                                                viewModel.linkSubnote(currentNoteId, linkable.id)
+                                                showLinkSubnoteDialog = false
+                                            }
+                                            .padding(8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = linkable.title.ifEmpty { "Sem Título" },
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            color = getDarkNoteAccentColor(linkable.colorCode)
+                                        )
+                                        Text(
+                                            text = if (linkable.type == NoteType.TEXT.value) "Texto" else "Checklist",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = DarkOnSurface.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLinkSubnoteDialog = false }) {
+                        Text("Cancelar", color = getDarkNoteAccentColor(colorCode))
+                    }
+                }
+            )
         }
 
         if (showColorDialog) {
