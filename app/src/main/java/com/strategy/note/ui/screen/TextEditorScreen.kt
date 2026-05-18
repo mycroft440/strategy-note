@@ -44,6 +44,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.draw.drawBehind
 import com.strategy.note.ui.theme.DarkSurface
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,6 +77,20 @@ fun TextEditorScreen(
     var isUndoRedoAction by remember { mutableStateOf(false) }
     var lastPushedState by remember { mutableStateOf(Pair("", "")) }
 
+    var showLinkSubnoteDialog by remember { mutableStateOf(false) }
+    var showDottedLines by remember { mutableStateOf(true) }
+    var showNoteSettingsDialog by remember { mutableStateOf(false) }
+    var formatMode by remember { mutableStateOf(0) }
+    val imageUris = remember { mutableStateListOf<String>() }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            try {
+                context.contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) {}
+            imageUris.add(it.toString())
+        }
+    }
+
     LaunchedEffect(noteId) {
         if (noteId > 0 && !isLoaded) {
             val note = viewModel.allNotes.value.find { it.id == noteId }
@@ -78,6 +100,10 @@ fun TextEditorScreen(
                 colorCode = note.colorCode
                 reminderTime = note.reminderTime
                 lastPushedState = Pair(note.title, note.content)
+                if (note.images.isNotEmpty()) {
+                    imageUris.clear()
+                    imageUris.addAll(note.images.split(",").filter { it.isNotBlank() })
+                }
             }
             currentNoteId = noteId
             isLoaded = true
@@ -161,7 +187,8 @@ fun TextEditorScreen(
                 colorCode = colorCode,
                 reminderTime = reminderTime,
                 modifiedAt = System.currentTimeMillis(),
-                notebookId = viewModel.selectedNotebookId.value
+                notebookId = viewModel.selectedNotebookId.value,
+                images = imageUris.joinToString(",")
             )
             viewModel.saveNote(context, note) { insertedId ->
                 currentNoteId = insertedId
@@ -191,7 +218,8 @@ fun TextEditorScreen(
                 colorCode = colorCode,
                 reminderTime = reminderTime,
                 modifiedAt = System.currentTimeMillis(),
-                notebookId = viewModel.selectedNotebookId.value
+                notebookId = viewModel.selectedNotebookId.value,
+                images = imageUris.joinToString(",")
             )
             viewModel.saveNote(context, note) { insertedId ->
                 currentNoteId = insertedId
@@ -199,9 +227,7 @@ fun TextEditorScreen(
         }
     }
 
-    var showLinkSubnoteDialog by remember { mutableStateOf(false) }
-    var showDottedLines by remember { mutableStateOf(true) }
-    var showNoteSettingsDialog by remember { mutableStateOf(false) }
+
 
     Scaffold(
         topBar = {
@@ -324,7 +350,57 @@ fun TextEditorScreen(
                 )
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = {
+                    val nl = if (content.isNotEmpty() && !content.endsWith("\n")) "\n" else ""
+                    content = content + nl + "\u2610 "
+                }, modifier = Modifier.size(36.dp)) {
+                    Icon(imageVector = Icons.Default.CheckBox, contentDescription = "Checkbox",
+                        tint = getDarkNoteAccentColor(colorCode), modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = {
+                    val lines = content.split("\n").toMutableList()
+                    val idx = lines.indexOfLast { it.startsWith("\u2610 ") }
+                    if (idx >= 0) {
+                        val text = lines[idx].removePrefix("\u2610 ")
+                        lines[idx] = "\u2611 " + text.map { c -> "$c\u0336" }.joinToString("")
+                        content = lines.joinToString("\n")
+                    }
+                }, modifier = Modifier.size(36.dp)) {
+                    Icon(imageVector = Icons.Default.CheckCircle, contentDescription = "Marcar",
+                        tint = getDarkNoteAccentColor(colorCode).copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = {
+                    formatMode = if (formatMode == 1) 0 else 1
+                }, modifier = Modifier.size(36.dp)) {
+                    Icon(imageVector = Icons.Default.FormatListBulleted, contentDescription = "Bullets",
+                        tint = if (formatMode == 1) getDarkNoteAccentColor(colorCode) else DarkOnSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = {
+                    formatMode = if (formatMode == 2) 0 else 2
+                }, modifier = Modifier.size(36.dp)) {
+                    Icon(imageVector = Icons.Default.FormatListNumbered, contentDescription = "Numbers",
+                        tint = if (formatMode == 2) getDarkNoteAccentColor(colorCode) else DarkOnSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = {
+                    imagePicker.launch(arrayOf("image/*"))
+                }, modifier = Modifier.size(36.dp)) {
+                    Icon(imageVector = Icons.Default.Image, contentDescription = "Imagem",
+                        tint = getDarkNoteAccentColor(colorCode), modifier = Modifier.size(20.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             Box(
                 modifier = Modifier
@@ -354,7 +430,58 @@ fun TextEditorScreen(
                 }
                 TextField(
                     value = content,
-                    onValueChange = { content = it },
+                    onValueChange = { newValue ->
+                        var processedValue = newValue
+                        val oldNl = content.count { c -> c == '\n' }
+                        val newNl = newValue.count { c -> c == '\n' }
+                        if (newNl > oldNl) {
+                            // Find the index of the inserted newline
+                            var diffIdx = 0
+                            while (diffIdx < content.length && diffIdx < newValue.length && content[diffIdx] == newValue[diffIdx]) {
+                                diffIdx++
+                            }
+                            if (diffIdx < newValue.length && newValue[diffIdx] == '\n') {
+                                // Find the start of the previous line
+                                var lineStart = diffIdx - 1
+                                while (lineStart >= 0 && newValue[lineStart] != '\n') {
+                                    lineStart--
+                                }
+                                lineStart++
+                                val prevLine = newValue.substring(lineStart, diffIdx)
+                                
+                                // Auto-continue existing prefix
+                                if (prevLine.startsWith("\u2610 ")) {
+                                    processedValue = newValue.substring(0, diffIdx + 1) + "\u2610 " + newValue.substring(diffIdx + 1)
+                                } else if (prevLine.startsWith("\u2611 ")) {
+                                    processedValue = newValue.substring(0, diffIdx + 1) + "\u2610 " + newValue.substring(diffIdx + 1)
+                                } else if (prevLine.startsWith("\u2022 ")) {
+                                    processedValue = newValue.substring(0, diffIdx + 1) + "\u2022 " + newValue.substring(diffIdx + 1)
+                                } else {
+                                    val match = Regex("^(\\d+)\\.\\s").find(prevLine)
+                                    if (match != null) {
+                                        val num = match.groupValues[1].toInt()
+                                        processedValue = newValue.substring(0, diffIdx + 1) + "${num + 1}. " + newValue.substring(diffIdx + 1)
+                                    } else {
+                                        // No existing prefix, but formatMode might be active
+                                        if (formatMode == 1) {
+                                            processedValue = newValue.substring(0, diffIdx + 1) + "\u2022 " + newValue.substring(diffIdx + 1)
+                                        } else if (formatMode == 2) {
+                                            // Count number of numbered list lines to find next number
+                                            val lines = newValue.substring(0, diffIdx).split('\n')
+                                            var numCount = 1
+                                            for (ln in lines) {
+                                                if (Regex("^\\d+\\.\\s").containsMatchIn(ln)) {
+                                                    numCount++
+                                                }
+                                            }
+                                            processedValue = newValue.substring(0, diffIdx + 1) + "${numCount}. " + newValue.substring(diffIdx + 1)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        content = processedValue
+                    },
                     placeholder = { Text(stringResource(R.string.content_hint), color = DarkOnSurfaceVariant.copy(alpha = 0.5f)) },
                     modifier = Modifier.fillMaxSize(),
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
@@ -368,6 +495,39 @@ fun TextEditorScreen(
                         unfocusedIndicatorColor = Color.Transparent
                     )
                 )
+            }
+
+            if (imageUris.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                imageUris.forEachIndexed { idx, uriStr ->
+                    val bmp = remember(uriStr) {
+                        try {
+                            context.contentResolver.openInputStream(Uri.parse(uriStr))?.use { stream ->
+                                BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                            }
+                        } catch (_: Exception) { null }
+                    }
+                    if (bmp != null) {
+                        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                            Image(
+                                bitmap = bmp,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                            )
+                            IconButton(
+                                onClick = { imageUris.removeAt(idx) },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(28.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Close, "Remover", tint = Color.White, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                }
             }
 
             if (currentNoteId > 0) {
