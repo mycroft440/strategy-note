@@ -54,6 +54,12 @@ fun TextEditorScreen(
     var currentNoteId by remember { mutableStateOf(noteId) }
     val focusRequester = remember { FocusRequester() }
 
+    // Undo / Redo History State Management
+    val undoStack = remember { mutableStateListOf<Pair<String, String>>() }
+    val redoStack = remember { mutableStateListOf<Pair<String, String>>() }
+    var isUndoRedoAction by remember { mutableStateOf(false) }
+    var lastPushedState by remember { mutableStateOf(Pair("", "")) }
+
     LaunchedEffect(noteId) {
         if (noteId > 0 && !isLoaded) {
             val note = viewModel.allNotes.value.find { it.id == noteId }
@@ -62,11 +68,65 @@ fun TextEditorScreen(
                 content = note.content
                 colorCode = note.colorCode
                 reminderTime = note.reminderTime
+                lastPushedState = Pair(note.title, note.content)
             }
             currentNoteId = noteId
             isLoaded = true
         } else {
             isLoaded = true
+        }
+    }
+
+    LaunchedEffect(title, content) {
+        if (!isLoaded) return@LaunchedEffect
+        
+        if (isUndoRedoAction) {
+            isUndoRedoAction = false
+            return@LaunchedEffect
+        }
+
+        val currentState = Pair(title, content)
+        if (currentState != lastPushedState) {
+            val contentDiffersSpace = content.endsWith(" ") || content.endsWith("\n") || title.endsWith(" ")
+            
+            if (contentDiffersSpace) {
+                if (undoStack.size >= 100) undoStack.removeAt(0)
+                undoStack.add(lastPushedState)
+                redoStack.clear()
+                lastPushedState = currentState
+            } else {
+                delay(500)
+                if (Pair(title, content) == currentState) {
+                    if (undoStack.size >= 100) undoStack.removeAt(0)
+                    undoStack.add(lastPushedState)
+                    redoStack.clear()
+                    lastPushedState = currentState
+                }
+            }
+        }
+    }
+
+    val performUndo = {
+        if (undoStack.isNotEmpty()) {
+            val previousState = undoStack.removeLast()
+            redoStack.add(Pair(title, content))
+            
+            isUndoRedoAction = true
+            title = previousState.first
+            content = previousState.second
+            lastPushedState = previousState
+        }
+    }
+
+    val performRedo = {
+        if (redoStack.isNotEmpty()) {
+            val nextState = redoStack.removeLast()
+            undoStack.add(Pair(title, content))
+            
+            isUndoRedoAction = true
+            title = nextState.first
+            content = nextState.second
+            lastPushedState = nextState
         }
     }
 
@@ -148,6 +208,26 @@ fun TextEditorScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = performUndo,
+                        enabled = undoStack.isNotEmpty()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Undo,
+                            contentDescription = "Undo",
+                            tint = if (undoStack.isNotEmpty()) LocalContentColor.current else LocalContentColor.current.copy(alpha = 0.38f)
+                        )
+                    }
+                    IconButton(
+                        onClick = performRedo,
+                        enabled = redoStack.isNotEmpty()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Redo,
+                            contentDescription = "Redo",
+                            tint = if (redoStack.isNotEmpty()) LocalContentColor.current else LocalContentColor.current.copy(alpha = 0.38f)
+                        )
+                    }
                     IconButton(onClick = { showColorDialog = true }) {
                         Icon(imageVector = Icons.Default.Palette, contentDescription = "Change Color")
                     }
