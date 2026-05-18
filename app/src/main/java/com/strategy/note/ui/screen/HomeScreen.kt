@@ -48,7 +48,6 @@ fun HomeScreen(
     val context = LocalContext.current
     val notes by viewModel.filteredNotes.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
-    val selectedColorFilter by viewModel.selectedColorFilter.collectAsState()
 
     var isGridView by remember { mutableStateOf(true) }
     var showAddNoteDialog by remember { mutableStateOf(false) }
@@ -116,52 +115,7 @@ fun HomeScreen(
                 )
             )
 
-            LazyRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                item {
-                    FilterChip(
-                        selected = selectedColorFilter == null,
-                        onClick = { viewModel.setColorFilter(null) },
-                        label = { Text("All") },
-                        shape = RoundedCornerShape(20.dp)
-                    )
-                }
-                items(NoteColors) { color ->
-                    val colorHex = color.toArgb().toLong()
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                            .clickable { viewModel.setColorFilter(colorHex) }
-                            .padding(2.dp)
-                    ) {
-                        if (selectedColorFilter == colorHex) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(CircleShape)
-                                    .background(Color.Black.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Selected",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(8.dp))
 
             if (notes.isEmpty()) {
                 Box(
