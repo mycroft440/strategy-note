@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.strategy.note.R
 import com.strategy.note.data.Note
 import com.strategy.note.data.NoteType
@@ -38,6 +39,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.draw.drawBehind
+import com.strategy.note.ui.theme.DarkSurface
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +57,7 @@ fun TextEditorScreen(
     val context = LocalContext.current
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
-    var colorCode by remember { mutableStateOf(NoteColors[2].toArgb().toLong()) }
+    var colorCode by remember { mutableStateOf(NoteColors[6].toArgb().toLong()) }
     var reminderTime by remember { mutableStateOf<Long?>(null) }
     var isLoaded by remember { mutableStateOf(false) }
     var currentNoteId by remember { mutableStateOf(noteId) }
@@ -191,8 +197,9 @@ fun TextEditorScreen(
         }
     }
 
-    var showColorDialog by remember { mutableStateOf(false) }
     var showLinkSubnoteDialog by remember { mutableStateOf(false) }
+    var showDottedLines by remember { mutableStateOf(true) }
+    var showNoteSettingsDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -232,15 +239,8 @@ fun TextEditorScreen(
                             tint = if (redoStack.isNotEmpty()) LocalContentColor.current else LocalContentColor.current.copy(alpha = 0.38f)
                         )
                     }
-                    IconButton(onClick = { showColorDialog = true }) {
-                        Icon(imageVector = Icons.Default.Palette, contentDescription = "Change Color")
-                    }
-                    IconButton(onClick = {
-                        showDateTimePicker(context) { selectedTime ->
-                            reminderTime = selectedTime
-                        }
-                    }) {
-                        Icon(imageVector = Icons.Default.Alarm, contentDescription = "Set Reminder")
+                    IconButton(onClick = { showNoteSettingsDialog = true }) {
+                        Icon(imageVector = Icons.Default.Settings, contentDescription = "Configurações da Nota")
                     }
                     if (noteId > 0) {
                         IconButton(onClick = {
@@ -324,21 +324,49 @@ fun TextEditorScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            TextField(
-                value = content,
-                onValueChange = { content = it },
-                placeholder = { Text(stringResource(R.string.content_hint), color = DarkOnSurfaceVariant.copy(alpha = 0.5f)) },
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = DarkOnSurface),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
+                    .weight(1f)
+            ) {
+                if (showDottedLines) {
+                    Canvas(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        val lineSpacing = 28.dp.toPx()
+                        val startY = 24.dp.toPx()
+                        val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f), 0f)
+                        val lineColor = androidx.compose.ui.graphics.Color(0xFF3A3A3A)
+                        var y = startY
+                        while (y < size.height) {
+                            drawLine(
+                                color = lineColor,
+                                start = Offset(0f, y),
+                                end = Offset(size.width, y),
+                                strokeWidth = 1f,
+                                pathEffect = dashEffect
+                            )
+                            y += lineSpacing
+                        }
+                    }
+                }
+                TextField(
+                    value = content,
+                    onValueChange = { content = it },
+                    placeholder = { Text(stringResource(R.string.content_hint), color = DarkOnSurfaceVariant.copy(alpha = 0.5f)) },
+                    modifier = Modifier.fillMaxSize(),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(
+                        color = DarkOnSurface,
+                        lineHeight = 28.sp
+                    ),
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    )
                 )
-            )
+            }
 
             if (currentNoteId > 0) {
                 Spacer(modifier = Modifier.height(16.dp))
@@ -573,30 +601,117 @@ fun TextEditorScreen(
             )
         }
 
-        if (showColorDialog) {
+        if (showNoteSettingsDialog) {
             AlertDialog(
-                onDismissRequest = { showColorDialog = false },
-                title = { Text("Choose Pastel Color") },
+                onDismissRequest = { showNoteSettingsDialog = false },
+                title = {
+                    Text(
+                        text = "Configurações da Nota",
+                        fontWeight = FontWeight.Bold,
+                        color = getDarkNoteAccentColor(colorCode)
+                    )
+                },
                 text = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        NoteColors.forEach { color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .clickable {
-                                        colorCode = color.toArgb().toLong()
-                                        showColorDialog = false
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // Dotted Lines Toggle
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Linhas Pontilhadas",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = DarkOnSurface
+                            )
+                            Switch(
+                                checked = showDottedLines,
+                                onCheckedChange = { showDottedLines = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = getDarkNoteAccentColor(colorCode),
+                                    checkedTrackColor = getDarkNoteAccentColor(colorCode).copy(alpha = 0.3f)
+                                )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Color Selection
+                        Text(
+                            text = "Cor da Nota",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkOnSurface.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            NoteColors.forEach { color ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .clickable {
+                                            colorCode = color.toArgb().toLong()
+                                        }
+                                ) {
+                                    if (color.toArgb().toLong() == colorCode) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .align(Alignment.Center)
+                                                .size(18.dp),
+                                            tint = Color.White
+                                        )
                                     }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Reminder Section
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .clickable {
+                                    showDateTimePicker(context) { selectedTime ->
+                                        reminderTime = selectedTime
+                                    }
+                                }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Alarm,
+                                contentDescription = null,
+                                tint = getDarkNoteAccentColor(colorCode),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = if (reminderTime != null) "Lembrete: " + SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault()).format(Date(reminderTime!!)) else "Definir Lembrete",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = DarkOnSurface
                             )
                         }
                     }
                 },
-                confirmButton = {}
+                confirmButton = {
+                    TextButton(onClick = { showNoteSettingsDialog = false }) {
+                        Text("Fechar", color = getDarkNoteAccentColor(colorCode))
+                    }
+                }
             )
         }
     }

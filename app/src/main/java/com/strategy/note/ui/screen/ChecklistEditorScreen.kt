@@ -53,7 +53,7 @@ fun ChecklistEditorScreen(
 ) {
     val context = LocalContext.current
     var title by remember { mutableStateOf("") }
-    var colorCode by remember { mutableStateOf(NoteColors[4].toArgb().toLong()) }
+    var colorCode by remember { mutableStateOf(NoteColors[6].toArgb().toLong()) }
     var reminderTime by remember { mutableStateOf<Long?>(null) }
     var isLoaded by remember { mutableStateOf(false) }
     var currentNoteId by remember { mutableStateOf(noteId) }
@@ -137,8 +137,8 @@ fun ChecklistEditorScreen(
         }
     }
 
-    var showColorDialog by remember { mutableStateOf(false) }
     var showLinkSubnoteDialog by remember { mutableStateOf(false) }
+    var showNoteSettingsDialog by remember { mutableStateOf(false) }
     val subnotes by viewModel.getSubnotes(currentNoteId).collectAsState(initial = emptyList())
 
     Scaffold(
@@ -159,15 +159,8 @@ fun ChecklistEditorScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showColorDialog = true }) {
-                        Icon(imageVector = Icons.Default.Palette, contentDescription = "Change Color")
-                    }
-                    IconButton(onClick = {
-                        showDateTimePicker(context) { selectedTime ->
-                            reminderTime = selectedTime
-                        }
-                    }) {
-                        Icon(imageVector = Icons.Default.Alarm, contentDescription = "Set Reminder")
+                    IconButton(onClick = { showNoteSettingsDialog = true }) {
+                        Icon(imageVector = Icons.Default.Settings, contentDescription = "Configurações da Nota")
                     }
                     if (noteId > 0) {
                         IconButton(onClick = {
@@ -565,30 +558,90 @@ fun ChecklistEditorScreen(
             )
         }
 
-        if (showColorDialog) {
+        if (showNoteSettingsDialog) {
             AlertDialog(
-                onDismissRequest = { showColorDialog = false },
-                title = { Text("Choose Pastel Color") },
+                onDismissRequest = { showNoteSettingsDialog = false },
+                title = {
+                    Text(
+                        text = "Configurações da Nota",
+                        fontWeight = FontWeight.Bold,
+                        color = getDarkNoteAccentColor(colorCode)
+                    )
+                },
                 text = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        NoteColors.forEach { color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .clickable {
-                                        colorCode = color.toArgb().toLong()
-                                        showColorDialog = false
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // Color Selection
+                        Text(
+                            text = "Cor da Nota",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkOnSurface.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            NoteColors.forEach { color ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .clickable {
+                                            colorCode = color.toArgb().toLong()
+                                        }
+                                ) {
+                                    if (color.toArgb().toLong() == colorCode) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .align(Alignment.Center)
+                                                .size(18.dp),
+                                            tint = Color.White
+                                        )
                                     }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Reminder Section
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .clickable {
+                                    showDateTimePicker(context) { selectedTime ->
+                                        reminderTime = selectedTime
+                                    }
+                                }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Alarm,
+                                contentDescription = null,
+                                tint = getDarkNoteAccentColor(colorCode),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = if (reminderTime != null) "Lembrete: " + SimpleDateFormat("dd/MM/yy HH:mm", Locale.getDefault()).format(Date(reminderTime!!)) else "Definir Lembrete",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = DarkOnSurface
                             )
                         }
                     }
                 },
-                confirmButton = {}
+                confirmButton = {
+                    TextButton(onClick = { showNoteSettingsDialog = false }) {
+                        Text("Fechar", color = getDarkNoteAccentColor(colorCode))
+                    }
+                }
             )
         }
     }
