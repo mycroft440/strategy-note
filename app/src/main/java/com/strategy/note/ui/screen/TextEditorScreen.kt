@@ -33,6 +33,10 @@ import com.strategy.note.ui.theme.DarkOnSurfaceVariant
 import com.strategy.note.viewmodel.NoteViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +51,8 @@ fun TextEditorScreen(
     var colorCode by remember { mutableStateOf(NoteColors[2].toArgb().toLong()) }
     var reminderTime by remember { mutableStateOf<Long?>(null) }
     var isLoaded by remember { mutableStateOf(false) }
+    var currentNoteId by remember { mutableStateOf(noteId) }
+    val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(noteId) {
         if (noteId > 0 && !isLoaded) {
@@ -57,24 +63,68 @@ fun TextEditorScreen(
                 colorCode = note.colorCode
                 reminderTime = note.reminderTime
             }
+            currentNoteId = noteId
             isLoaded = true
         } else {
             isLoaded = true
         }
     }
 
+    LaunchedEffect(isLoaded) {
+        if (isLoaded && noteId <= 0) {
+            focusRequester.requestFocus()
+        }
+    }
+
     val saveCurrentNote = {
-        if (title.isNotEmpty() || content.isNotEmpty()) {
+        val finalTitle = if (title.trim().isEmpty() && content.trim().isNotEmpty()) {
+            viewModel.generateDefaultTitle()
+        } else {
+            title.trim()
+        }
+        
+        if (finalTitle.isNotEmpty() || content.trim().isNotEmpty()) {
             val note = Note(
-                id = if (noteId > 0) noteId else 0,
-                title = title,
+                id = if (currentNoteId > 0) currentNoteId else 0,
+                title = finalTitle,
                 content = content,
                 type = NoteType.TEXT.value,
                 colorCode = colorCode,
                 reminderTime = reminderTime,
                 modifiedAt = System.currentTimeMillis()
             )
-            viewModel.saveNote(context, note)
+            viewModel.saveNote(context, note) { insertedId ->
+                currentNoteId = insertedId
+            }
+        }
+    }
+
+    BackHandler {
+        saveCurrentNote()
+        onNavigateBack()
+    }
+
+    LaunchedEffect(title, content) {
+        if (!isLoaded) return@LaunchedEffect
+        if (title.isNotEmpty() || content.isNotEmpty()) {
+            delay(1000)
+            val finalTitle = if (title.trim().isEmpty() && content.trim().isNotEmpty()) {
+                viewModel.generateDefaultTitle()
+            } else {
+                title.trim()
+            }
+            val note = Note(
+                id = if (currentNoteId > 0) currentNoteId else 0,
+                title = finalTitle,
+                content = content,
+                type = NoteType.TEXT.value,
+                colorCode = colorCode,
+                reminderTime = reminderTime,
+                modifiedAt = System.currentTimeMillis()
+            )
+            viewModel.saveNote(context, note) { insertedId ->
+                currentNoteId = insertedId
+            }
         }
     }
 
@@ -85,7 +135,7 @@ fun TextEditorScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (noteId > 0) "Edit Note" else "New Note",
+                        text = if (noteId > 0) "Edit Note" else "Digite o Título",
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -178,7 +228,7 @@ fun TextEditorScreen(
                 value = title,
                 onValueChange = { title = it },
                 placeholder = { Text(stringResource(R.string.title_hint), color = DarkOnSurfaceVariant.copy(alpha = 0.5f)) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                 textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = getDarkNoteAccentColor(colorCode)),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,

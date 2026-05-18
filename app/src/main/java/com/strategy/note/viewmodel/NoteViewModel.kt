@@ -45,6 +45,27 @@ class NoteViewModel(private val repository: NoteRepository) : ViewModel() {
         _selectedColorFilter.value = color
     }
 
+    fun generateDefaultTitle(): String {
+        val today = java.util.Calendar.getInstance()
+        val day = today.get(java.util.Calendar.DAY_OF_MONTH)
+        val month = today.get(java.util.Calendar.MONTH) + 1
+        val year = today.get(java.util.Calendar.YEAR)
+        
+        val dateStr = String.format(java.util.Locale.US, "%02d-%02d-%04d", day, month, year)
+        
+        val todayNotesCount = allNotes.value.count { note ->
+            val noteCalendar = java.util.Calendar.getInstance().apply { timeInMillis = note.createdAt }
+            noteCalendar.get(java.util.Calendar.DAY_OF_MONTH) == day &&
+            noteCalendar.get(java.util.Calendar.MONTH) + 1 == month &&
+            noteCalendar.get(java.util.Calendar.YEAR) == year
+        }
+        
+        val nextNumber = todayNotesCount + 1
+        val numberStr = String.format(java.util.Locale.US, "%02d", nextNumber)
+        
+        return "$dateStr $numberStr"
+    }
+
     fun saveNote(context: Context, note: Note, checklistItems: List<ChecklistItem> = emptyList(), onComplete: (Int) -> Unit = {}) {
         viewModelScope.launch {
             val noteId = repository.insertNote(note)
