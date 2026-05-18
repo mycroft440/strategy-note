@@ -977,11 +977,13 @@ def make_github_request(url, token=None, is_json=True):
         for i in range(retries):
             try:
                 with opener.open(req, timeout=30) as response:
+                    content = response.read()
+                    if content.startswith(b'\x1f\x8b'):
+                        import gzip
+                        content = gzip.decompress(content)
                     if is_json:
-                        content = response.read()
                         return json.loads(content.decode())
                     else:
-                        content = response.read() 
                         text = content[-500000:].decode(errors='ignore') if len(content) > 500000 else content.decode(errors='ignore')
                         return text
             except (urllib.error.URLError, ConnectionResetError) as e:
