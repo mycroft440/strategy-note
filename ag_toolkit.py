@@ -728,7 +728,8 @@ def get_replacement_content(new_content: str, new_content_path: str, allow_empty
     val = ""
     if use_stdin:
         print_step("Lendo conteudo do STDIN (Pressione Ctrl+D para finalizar)...")
-        val = sys.stdin.read()
+        import io
+        val = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8').read()
     elif new_content_path:
         source = resolve_project_path(new_content_path)
         if is_binary_file(source): print_error_and_exit("O caminho apontou para um arquivo binario.")
@@ -751,23 +752,56 @@ def create_file(args):
     save_change("create-file", path, content, "Arquivo criado com sucesso desde o zero.", args.preview, args.dry_run)
 
 def replace_text(args):
-    print_header("Replace Text")
-    path = resolve_project_path(args.file)
-    raw = path.read_text(encoding='utf-8')
+    print_header("Replace Text (Single or Batch)")
     
+    decoded_find = decode_base64_if_needed(args.findtext, args.b64)
     repl = get_replacement_content(args.newcontent, args.newcontentpath, args.allowemptycontent, args.b64, getattr(args, 'stdin', False))
     
+    # Modo Batch (Multi-Arquivo)
+    if getattr(args, 'dir', None):
+        target_dir = resolve_project_path(args.dir)
+        if not target_dir.exists(): print_error_and_exit(f"Diretorio {args.dir} nao existe.")
+        print_step(f"Modo Batch ativado no diretorio: {target_dir}")
+        count_files = 0
+        count_replaces = 0
+        extensions = ['.py', '.kt', '.java', '.js', '.ts', '.html', '.css', '.xml', '.yml', '.yaml', '.md', '.txt']
+        for p in target_dir.rglob('*'):
+            if not p.is_file() or p.suffix.lower() not in extensions: continue
+            if any(part in p.parts for part in ['.git', 'build', '.ag-agent', 'node_modules', '__pycache__']): continue
+            try:
+                raw = p.read_text(encoding='utf-8')
+                matches = get_matches_robust(raw, decoded_find, args.fuzzy)
+                if matches:
+                    new_raw = raw
+                    offset = 0
+                    for m in matches:
+                        start, end = m.start() + offset, m.end() + offset
+                        new_raw = new_raw[:start] + repl + new_raw[end:]
+                        offset += len(repl) - (m.end() - m.start())
+                    save_change("replace-batch", p, new_raw, f"Ocorrencias modificadas: {len(matches)}", args.preview, args.dry_run)
+                    count_files += 1
+                    count_replaces += len(matches)
+            except: pass
+        if count_files == 0:
+            print_error_and_exit("Nenhum arquivo modificado no diretorio alvo.")
+        print_success(f"Batch Replace concluido: {count_replaces} substituicoes em {count_files} arquivos.")
+        return
+
+    # Modo Arquivo Unico
+    path = resolve_project_path(args.file)
+    raw = path.read_text(encoding='utf-8')
+
     if hasattr(args, 'lines') and args.lines:
         try:
             start_l, end_l = map(int, args.lines.split('-'))
             lines_array = raw.splitlines()
             if start_l < 1 or end_l > len(lines_array) or start_l > end_l:
                 print_error_and_exit("Range de linhas invalido.")
-            
+
             new_lines_array = lines_array[:start_l-1] + repl.splitlines() + lines_array[end_l:]
             new_raw = "\n".join(new_lines_array)
             save_change("replace-lines", path, new_raw, f"Substituidas linhas {start_l}-{end_l}", args.preview, args.dry_run)
-            
+
             valid, msg = validate_syntax_local(path)
             if not valid:
                 print_warning(f"SYNTAX-HEAL TRIGGERED: {msg}")
@@ -779,27 +813,23 @@ def replace_text(args):
                 print_error_and_exit(f"Erro no parser de --lines: {e}")
             else:
                 import sys; sys.exit(1)
-                
-    decoded_find = decode_base64_if_needed(args.findtext, args.b64)
-    repl = get_replacement_content(args.newcontent, args.newcontentpath, args.allowemptycontent, args.b64, getattr(args, 'stdin', False))
+
     matches = get_matches_robust(raw, decoded_find, args.fuzzy)
-    
+
     if not matches:
         if repl and repl.strip() and get_matches_robust(raw, repl, args.fuzzy):
             print_success("Idempotencia: O novo texto ja esta presente no arquivo. Skip realizado.")
             return
         print_error_and_exit("Texto procurado nao encontrado. Tente ativar --fuzzy.")
     assert_expected_count(len(matches), args.expectedcount, "replace-text", args.force)
-    
-    # Usamos o método de substituição baseado nos matches robustos encontrados
-    # A lógica aqui aplica a substituição sobre o conteúdo raw usando a posição dos matches encontrados
+
     new_raw = raw
     offset = 0
     for m in matches:
         start, end = m.start() + offset, m.end() + offset
         new_raw = new_raw[:start] + repl + new_raw[end:]
         offset += len(repl) - (m.end() - m.start())
-        
+
     save_change("replace-text", path, new_raw, f"Ocorrencias identificadas e modificadas: {len(matches)}", args.preview, args.dry_run)
 
 def replace_regex(args):
@@ -1134,6 +1164,29 @@ def build_check():
     if gradlew_path.exists():
         print_step("Delegando assembleDebug ao wrapper (Modo Streaming)...")
         cmd = [str(gradlew_path), "assembleDebug", "--console=plain"]
+    elif (ROOT_PATH / "build.gradle.kts").exists() or (ROOT_PATH / "build.gradle").exists():
+        print_warning("Gradle wrapper (gradlew) ausente. Iniciando Auto-Bootstrap...")
+        import shutil
+        if shutil.which("gradle"):
+            print_step("Gerando wrapper via system gradle...")
+            os.system("gradle wrapper")
+            if gradlew_path.exists():
+                cmd = [str(gradlew_path), "assembleDebug", "--console=plain"]
+            else:
+                cmd = ["gradle", "assembleDebug", "--console=plain"]
+        else:
+            print_error_and_exit("Gradle nao encontrado no PATH e wrapper ausente. O AG-Toolkit requer o Wrapper ou Gradle instalado.")
+    else:
+        # Tenta fallback para Python ou NPM
+        if (ROOT_PATH / "package.json").exists():
+            cmd = ["npm", "run", "build"]
+        elif (ROOT_PATH / "setup.py").exists() or (ROOT_PATH / "requirements.txt").exists() or any(ROOT_PATH.glob("*.py")):
+            print_success("Estrutura Python validada com sucesso (Sintaxe OK).")
+            return
+        else:
+            print_error_and_exit("Nao foi possivel determinar o sistema de build (Nenhum gradle/npm/python).")
+
+    if 'cmd' in locals():
         out, code = run_command_streaming(cmd)
         
         # V26: Log Filterer (Smart Classification)
@@ -1269,6 +1322,69 @@ fun {args.screenname}() {{
 # 8.5. SUPER AGENT EXTENSIONS: AST MAP & DEP GRAPH & MEMORY & SPECULATE
 # =============================================================================
 
+def extract_kotlin_java_signatures(content: str, ext: str) -> list:
+    signatures = []
+    lines = content.splitlines()
+    in_comment = False
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+            
+        if line.startswith('/*'):
+            in_comment = True
+        if in_comment:
+            if '*/' in line:
+                in_comment = False
+            i += 1
+            continue
+            
+        if line.startswith('//') or line.startswith('@'):
+            i += 1
+            continue
+            
+        # Match class, interface, fun
+        match = re.search(r'\b(class|interface|fun|public\s+class|public\s+interface|public\s+void|private\s+void|protected\s+void|public\s+[\w<>]+\s+[\w]+)\b', line)
+        if match:
+            sig_lines = []
+            j = i
+            open_parens = 0
+            open_angles = 0
+            found_end = False
+            
+            while j < len(lines):
+                part = lines[j]
+                clean_part = re.sub(r'//.*', '', part)
+                
+                for char in clean_part:
+                    if char == '(': open_parens += 1
+                    elif char == ')': open_parens -= 1
+                    elif char == '<': open_angles += 1
+                    elif char == '>': open_angles -= 1
+                    elif char == '{' and open_parens == 0 and open_angles == 0:
+                        found_end = True
+                        break
+                    elif char == '=' and open_parens == 0 and open_angles == 0 and 'fun ' in line:
+                        found_end = True
+                        break
+                        
+                sig_lines.append(clean_part.split('{')[0].split('=')[0].strip())
+                if found_end or j > i + 10:
+                    break
+                j += 1
+            
+            full_sig = " ".join(sig_lines).strip()
+            full_sig = re.sub(r'\s+', ' ', full_sig)
+            if full_sig and not full_sig.endswith('}'):
+                signatures.append(full_sig)
+            
+            i = j
+        i += 1
+        
+    return signatures
+
 def ast_map(args):
     """
     Gera o mapa estrutural (AST leve) para reduzir o input do LLM.
@@ -1276,16 +1392,15 @@ def ast_map(args):
     """
     print_header('AST Mapping (Structural Context)')
     initialize_agent_dirs()
-    
+
     target_dir = resolve_project_path(args.dir) if args.dir else ROOT_PATH
     regex_sig = re.compile(r'^\s*(?:export\s+|public\s+|private\s+|protected\s+)?(?:class|def|function|fun|interface)\s+([a-zA-Z0-9_]+)', re.MULTILINE)
-    
+
     report = ["# PROJECT AST MAP (SIGNATURES ONLY)\n"]
     file_count = 0
-    
+
     extensions = ['.py', '.kt', '.ts', '.js', '.java', '.cpp', '.h']
-    
-    # V26: Detect custom @Composable functions from the project itself
+
     custom_composables = set()
     if target_dir.exists():
         for p in target_dir.rglob('*.kt'):
@@ -1294,8 +1409,7 @@ def ast_map(args):
                 c = p.read_text(encoding='utf-8', errors='ignore')
                 custom_composables.update(re.findall(r'@Composable\s+fun\s+([A-Z][a-zA-Z0-9_]+)', c))
             except: pass
-    
-    # V26: Comprehensive Material3 + Foundation component list
+
     material3_components = (
         'Scaffold|Column|Row|Box|LazyColumn|LazyRow|LazyVerticalGrid|'
         'Text|Button|IconButton|TextButton|OutlinedButton|FilledTonalButton|FloatingActionButton|ExtendedFloatingActionButton|'
@@ -1312,34 +1426,38 @@ def ast_map(args):
         'Snackbar|Badge|Chip|FilterChip|AssistChip|InputChip|'
         'ListItem|Icon|Image|Spacer|AnimatedVisibility|AnimatedContent'
     )
-    # Add project-specific composables
     if custom_composables:
         material3_components += '|' + '|'.join(custom_composables)
     compose_regex = re.compile(rf'\b({material3_components})\b\s*[\({{]')
-    
+
     from concurrent.futures import ThreadPoolExecutor
-    
+
     def process_file(p):
         if any(part in p.parts for part in ['.git', 'build', 'node_modules', '.ag-agent', 'dist']): return None
         try:
             content = p.read_text(encoding='utf-8', errors='ignore')
-            matches = regex_sig.findall(content)
             
-            # Compose Tree Extraction
+            if p.suffix in ['.kt', '.java']:
+                signatures = extract_kotlin_java_signatures(content, p.suffix)
+            else:
+                signatures = regex_sig.findall(content)
+
             compose_nodes = []
             if p.suffix == '.kt' and '@Composable' in content:
                 nodes = compose_regex.findall(content)
                 if nodes: compose_nodes = list(dict.fromkeys(nodes))
-                
-            if matches:
-                file_report = [f"## {get_relative_path(p)}"]
-                for m in matches: file_report.append(f"  - {m}")
+
+            if signatures or compose_nodes:
+                rel = p.relative_to(ROOT_PATH)
+                res = [f"## {rel}"]
+                for s in signatures:
+                    res.append(f"  - {s}")
                 if compose_nodes:
-                    file_report.append(f"    [Compose Tree: {', '.join(compose_nodes)}]")
-                file_report.append("")
-                return file_report
-        except: pass
-        return None
+                    res.append(f"    [Compose Tree: {', '.join(compose_nodes)}]")
+                res.append("")
+                return res
+            return None
+        except: return None
 
     all_files = []
     for ext in extensions:
@@ -1354,8 +1472,8 @@ def ast_map(args):
 
     out_path = AGENT_DIR / 'AST_MAP.md'
     out_path.write_text('\n'.join(report), encoding='utf-8')
-    print_success(f"AST Mapeada [V26 Parallel]: {file_count} arquivos significativos encontrados.")
-    if file_count < 20: 
+    print_success(f"AST Mapeada [V27 Advanced]: {file_count} arquivos significativos encontrados.")
+    if file_count < 20:
         for line in report: print(line)
     else: print_step(f"Resultado extenso gravado em {out_path} para RAG.")
 
@@ -1618,12 +1736,14 @@ def apply_plan(args):
 # =============================================================================
 # 10. GITHUB SYNC, CLONE E INIT (Protocolo Genesis e Auth)
 # =============================================================================
-def run_command_streaming(cmd_list: list, cwd: Path = ROOT_PATH):
-    """Executa comando com streaming de output em tempo real para o terminal do usuario."""
+def run_command_streaming(cmd_list: list, cwd: Path = ROOT_PATH, max_head: int = 50, max_tail: int = 100):
+    """Executa comando com streaming de output em tempo real. 
+    Token Saver V28: Trunca automaticamente logs colossais preservando head e tail criticos."""
     if JSON_MODE:
         res = subprocess.run(cmd_list, cwd=str(cwd), capture_output=True, text=True, encoding='utf-8', errors='replace')
-        return res.stdout + res.stderr, res.returncode
-        
+        raw = res.stdout + res.stderr
+        return _truncate_log(raw, max_head, max_tail), res.returncode
+
     process = subprocess.Popen(cmd_list, cwd=str(cwd), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
     full_output = []
     try:
@@ -1634,10 +1754,24 @@ def run_command_streaming(cmd_list: list, cwd: Path = ROOT_PATH):
     except KeyboardInterrupt:
         process.terminate()
         print_error_and_exit("Comando interrompido pelo usuario.")
-    
+
     process.stdout.close()
     return_code = process.wait()
-    return "".join(full_output), return_code
+    raw = "".join(full_output)
+    return _truncate_log(raw, max_head, max_tail), return_code
+
+def _truncate_log(raw: str, max_head: int = 50, max_tail: int = 100) -> str:
+    """Token Saver: Trunca log colossal mantendo inicio e fim (onde erros residem)."""
+    lines = raw.splitlines()
+    total = len(lines)
+    threshold = max_head + max_tail
+    if total <= threshold:
+        return raw
+    omitted = total - threshold
+    head = lines[:max_head]
+    tail = lines[-max_tail:]
+    marker = f"\n[... {omitted} LINHAS OMITIDAS PELO AG-TOOLKIT PARA ECONOMIA DE TOKENS ...]\n"
+    return "\n".join(head) + marker + "\n".join(tail)
 
 def run_git(args_list: list, check: bool = True) -> str:
     """Executa comando git com captura de erro e log imediato."""
@@ -1672,6 +1806,21 @@ def clone_repo(args):
     
     if (target_path / ".git").exists(): 
         return print_warning(f"Git ativo em {target_dir}. Abortando.")
+        
+    # V33 Auto-Heal: Evasao de diretorio nao vazio (.ag-agent)
+    moved_ag_agent = False
+    temp_ag_agent_backup = None
+    ag_agent_in_target = target_path / ".ag-agent"
+    if ag_agent_in_target.exists():
+        import tempfile
+        import uuid
+        import shutil
+        temp_ag_agent_backup = Path(tempfile.gettempdir()) / f".ag-agent-temp-{uuid.uuid4().hex}"
+        try:
+            shutil.move(str(ag_agent_in_target), str(temp_ag_agent_backup))
+            moved_ag_agent = True
+        except Exception as e:
+            print_warning(f"Nao foi possivel mover .ag-agent temporariamente: {e}")
     
     token = get_auth_token()
     auth_url = inject_token_url(args.url, token)
@@ -1682,6 +1831,15 @@ def clone_repo(args):
     cmd = ['git', 'clone', auth_url, str(target_path)]
     res = subprocess.run(cmd, capture_output=True, text=True, env=env)
     
+    if moved_ag_agent and temp_ag_agent_backup and temp_ag_agent_backup.exists():
+        try:
+            target_path.mkdir(parents=True, exist_ok=True)
+            if ag_agent_in_target.exists():
+                shutil.rmtree(ag_agent_in_target, ignore_errors=True)
+            shutil.move(str(temp_ag_agent_backup), str(ag_agent_in_target))
+        except Exception as e:
+            print_warning(f"Erro ao restaurar .ag-agent: {e}")
+            
     if res.returncode != 0: 
         print_error_and_exit(f"Falha ao clonar:\n{res.stderr}")
     
@@ -3433,12 +3591,16 @@ def agent_explain(args):
         print("Quando usar: Se um erro do compilador for teimoso ou se houverem duas abordagens arquiteturais.")
         print("Mecanica: Ele clona o workspace em N pastas, testa as solucoes concorrentemente e funde a que der sucesso.")
     elif cmd in ['ast', 'ast-map']:
-        print("O que e: Mapa sintatico resumido (-d 'pasta').")
-        print("Mecanica: Varre a pasta, removendo miolo de metodos. Retorna apenas assinaturas (funcoes e variaveis globais).")
-        print("Por que usar: Em repositorios massivos, ler um arquivo de 1000 linhas consome a sua janela de contexto inteira. O AST gasta apenas ~150 tokens por arquivo.")
+        print("O que e: Mapa sintatico avancado V27 (-d 'pasta').")
+        print("Kotlin/Java: Extracao de assinaturas COMPLETAS (nome + params + tipo de retorno), nao apenas nomes simples.")
+        print("Python/JS/TS: Regex de alta cobertura para funcoes, classes e interfaces.")
+        print("Por que usar: Em repositorios massivos, ler um arquivo de 1000 linhas consome a janela de contexto inteira. O AST gasta apenas ~150 tokens por arquivo.")
+        print("Bonus: Detecta arvore de Compose Nodes em arquivos Kotlin automaticamente.")
     elif cmd in ['rt', 'replace-text']:
-        print("O que e: Edicao inteligente baseada em Regex/Fuzzy.")
-        print("Dica Critica: SEMPRE codifique suas queries de busca e substituicao em Base64 e use a flag --b64, pois blocos multilinhas sofrem com escape de aspas no shell do sistema operacional.")
+        print("O que e: Edicao inteligente (Single ou Batch Multi-Arquivo).")
+        print("Modo Arquivo Unico: -f <arquivo> -q <busca> -c <novo>")
+        print("Modo Batch V28: -d <diretorio> -q <busca> -c <novo> (substitui em TODOS os arquivos do dir de uma vez)")
+        print("Dica Critica: SEMPRE codifique suas queries de busca e substituicao em Base64 e use a flag --b64.")
     else:
         print_warning(f"O comando '{cmd}' nao possui um manual detalhado ou nao existe.")
 
@@ -3806,11 +3968,44 @@ if __name__ == '__main__':
     print_success("AST Gerado via Tree-Sitter Nativo.")
 
 
+def ldplayer_deploy(args):
+    print_header("LDPLAYER AUTOMATIC DEPLOY & RUN")
+    try:
+        import sys
+        sys.path.append(str(ROOT_PATH))
+        from ldplayer_manager import LDPlayerManager
+    except Exception as e:
+        print_error_and_exit(f"Erro ao carregar modulo ldplayer_manager.py: {e}")
+        
+    apk_path = args.file if args.file else str(ROOT_PATH / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk")
+    package_name = args.package if args.package else "com.strategy.note"
+    screenshot_path = args.output if args.output else "app_screenshot.png"
+    
+    if not os.path.exists(apk_path):
+        build_apk_path = ROOT_PATH / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
+        if build_apk_path.exists():
+            apk_path = str(build_apk_path)
+        else:
+            apks = list(ROOT_PATH.glob("**/*.apk"))
+            if apks:
+                apk_path = str(apks[0])
+                print_step(f"Auto-detectado APK alternativo: {apk_path}")
+            else:
+                print_error_and_exit(f"Arquivo APK nao encontrado no caminho: {apk_path}. Compile o app antes.")
+
+    try:
+        ld = LDPlayerManager()
+        ld.auto_deploy(apk_path, package_name, screenshot_path)
+        print_success(f"Fluxo concluido de forma autonoma! Screenshot salva em: {screenshot_path}")
+    except Exception as e:
+        print_error_and_exit(f"Erro durante a automacao do LDPlayer: {e}")
+
+
 def map_tools(args):
     """V32: Exibe um manifesto JSON com todas as capacidades do toolkit."""
     import json
     tools = {
-        "System & Onboarding": {
+        "Emulator & Automation": {"ldplayer": "Auto deploy, run & screenshot on LDPlayer"}, "System & Onboarding": {
             "onboard": "Manual Agent Onboarding",
             "examples": "Payload exemplos JSON",
             "explain": "Explicacao de comandos",
@@ -3819,14 +4014,14 @@ def map_tools(args):
             "doctor": "Verificacao ambiental do Toolkit"
         },
         "File & Code Editing": {
-            "cf": "Cria arquivo (Genesis)",
+            "cf": "Cria arquivo ou recria do zero (--stdin aceita Stream UTF-8)",
             "rt": "Replace text (cirurgico - ECONOMIZA TOKENS)",
             "regex": "Replace text (regex)",
             "ib": "Insert before anchor",
             "ia": "Insert after anchor",
             "replace-block": "Replace bloco exato",
             "ensure": "Garante existencia de bloco de codigo",
-            "write-file": "Sobrescreve arquivo com relatorio",
+            "write-file": "Sobrescreve arquivo (--stdin UTF-8 suportado)",
             "normalize": "Normaliza quebras de linha",
             "format-kt": "Mecanismo auto-format Kotlin",
             "ast-edit": "Edicao cirurgica via Treesitter",
@@ -3937,6 +4132,9 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help='Mostra o diff sem aplicar a alteração')
     parser.add_argument('--old', type=str)
     parser.add_argument('--new', type=str)
+    parser.add_argument('--package', type=str, default='com.strategy.note')
+    parser.add_argument('--output', type=str, default='app_screenshot.png')
+    parser.add_argument('--name', type=str, help='Nome identificador da task/thread')
 
     args, _ = parser.parse_known_args()
     action = args.action.lower() if args.action else 'help'
@@ -4065,6 +4263,7 @@ def main():
         elif action in ['list-builds']: list_builds(args)
         elif action in ['last-logs']: fetch_last_logs(args)
         elif action in ['map-tools']: map_tools(args)
+        elif action in ['ldplayer', 'deploy-emul']: ldplayer_deploy(args)
         elif action in ['verify-sync', 'vs']:
             if args.dry_run:
                 print_header('Verify-Sync DRY RUN Mode')

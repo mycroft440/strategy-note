@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +33,9 @@ import com.strategy.note.data.Note
 import com.strategy.note.data.NoteType
 import com.strategy.note.ui.theme.NoteColors
 import com.strategy.note.ui.theme.getNoteColor
+import com.strategy.note.ui.theme.getDarkNoteCardColor
+import com.strategy.note.ui.theme.getDarkNoteAccentColor
+import com.strategy.note.ui.theme.DarkOnSurface
 import com.strategy.note.viewmodel.NoteViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -301,7 +305,7 @@ fun NoteCard(
                 onLongClick = { showDeleteConfirm = true }
             ),
         colors = CardDefaults.cardColors(
-            containerColor = getNoteColor(note.colorCode)
+            containerColor = getDarkNoteCardColor(note.colorCode)
         ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -320,7 +324,7 @@ fun NoteCard(
                     text = note.title.ifEmpty { "Untitled" },
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black,
+                    color = getDarkNoteAccentColor(note.colorCode),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -329,7 +333,7 @@ fun NoteCard(
                     Icon(
                         imageVector = Icons.Default.NotificationsActive,
                         contentDescription = "Reminder Set",
-                        tint = Color.Black.copy(alpha = 0.6f),
+                        tint = getDarkNoteAccentColor(note.colorCode).copy(alpha = 0.7f),
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -342,7 +346,7 @@ fun NoteCard(
                     note.content.ifEmpty { "Empty note" }
                 },
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.Black.copy(alpha = 0.7f),
+                color = DarkOnSurface.copy(alpha = 0.8f),
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis
             )

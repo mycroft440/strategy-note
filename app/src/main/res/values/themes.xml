@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.StrategyNote" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/purple_500</item>
-        <item name="colorSecondary">@color/teal_200</item>
-        <item name="android:statusBarColor">?attr/colorSurface</item>
-        <item name="android:windowLightStatusBar">true</item>
+    <style name="Theme.StrategyNote" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#0D0D0D</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>

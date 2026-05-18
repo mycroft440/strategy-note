@@ -41,7 +41,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@txml/note_widget_info" />
+                android:resource="@xml/note_widget_info" />
         </receiver>
     </application>
 

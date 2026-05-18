@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.Color
 import com.strategy.note.data.NoteDatabase
 
 class NoteWidget : GlanceAppWidget() {
-    override suspend fun provideContent(context: Context, glanceId: GlanceId) {
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
         val database = NoteDatabase.getDatabase(context)
         val noteDao = database.noteDao()
         val latestNote = noteDao.getLatestNote()

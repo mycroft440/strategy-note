@@ -1,5 +1,8 @@
 package com.strategy.note.ui.screen
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,10 +25,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.strategy.note.R
 import com.strategy.note.data.Note
-import com.strategy.note.data.ChecklistItem
 import com.strategy.note.data.NoteType
+import com.strategy.note.data.ChecklistItem
 import com.strategy.note.ui.theme.NoteColors
 import com.strategy.note.ui.theme.getNoteColor
+import com.strategy.note.ui.theme.getDarkNoteCardColor
+import com.strategy.note.ui.theme.getDarkNoteAccentColor
+import com.strategy.note.ui.theme.DarkOnSurface
+import com.strategy.note.ui.theme.DarkOnSurfaceVariant
+import com.strategy.note.ui.theme.DarkSurface
 import com.strategy.note.viewmodel.NoteViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -121,7 +129,7 @@ fun ChecklistEditorScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = getNoteColor(colorCode)
+                    containerColor = getDarkNoteCardColor(colorCode)
                 )
             )
         }
@@ -130,7 +138,7 @@ fun ChecklistEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(getNoteColor(colorCode))
+                .background(getDarkNoteCardColor(colorCode))
                 .padding(16.dp)
         ) {
             if (reminderTime != null) {
@@ -139,7 +147,7 @@ fun ChecklistEditorScreen(
                         .fillMaxWidth()
                         .padding(bottom = 8.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.05f))
+                        .background(Color.White.copy(alpha = 0.05f))
                         .padding(8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -152,12 +160,12 @@ fun ChecklistEditorScreen(
                             imageVector = Icons.Default.NotificationsActive,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = Color.Black.copy(alpha = 0.6f)
+                            tint = getDarkNoteAccentColor(colorCode).copy(alpha = 0.7f)
                         )
                         Text(
                             text = "Reminder: " + SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(reminderTime!!)),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Black.copy(alpha = 0.7f)
+                            color = DarkOnSurface.copy(alpha = 0.8f)
                         )
                     }
                     IconButton(
@@ -167,7 +175,7 @@ fun ChecklistEditorScreen(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Cancel Reminder",
-                            tint = Color.Black.copy(alpha = 0.6f),
+                            tint = getDarkNoteAccentColor(colorCode).copy(alpha = 0.7f),
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -177,9 +185,9 @@ fun ChecklistEditorScreen(
             TextField(
                 value = title,
                 onValueChange = { title = it },
-                placeholder = { Text(stringResource(R.string.title_hint), color = Color.Black.copy(alpha = 0.4f)) },
+                placeholder = { Text(stringResource(R.string.title_hint), color = DarkOnSurfaceVariant.copy(alpha = 0.5f)) },
                 modifier = Modifier.fillMaxWidth(),
-                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.Black),
+                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = getDarkNoteAccentColor(colorCode)),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -198,13 +206,13 @@ fun ChecklistEditorScreen(
                 OutlinedTextField(
                     value = newItemText,
                     onValueChange = { newItemText = it },
-                    placeholder = { Text("Add checklist item...", color = Color.Black.copy(alpha = 0.4f)) },
+                    placeholder = { Text("Add checklist item...", color = DarkOnSurfaceVariant.copy(alpha = 0.5f)) },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = DarkOnSurface),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.Black.copy(alpha = 0.5f),
-                        unfocusedBorderColor = Color.Black.copy(alpha = 0.2f)
+                        focusedBorderColor = getDarkNoteAccentColor(colorCode).copy(alpha = 0.8f),
+                        unfocusedBorderColor = DarkOnSurfaceVariant.copy(alpha = 0.3f)
                     )
                 )
                 IconButton(
@@ -224,9 +232,9 @@ fun ChecklistEditorScreen(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.1f))
+                        .background(getDarkNoteAccentColor(colorCode).copy(alpha = 0.2f))
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Item", tint = Color.Black)
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Item", tint = getDarkNoteAccentColor(colorCode))
                 }
             }
 
@@ -243,7 +251,7 @@ fun ChecklistEditorScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.3f))
+                            .background(Color.White.copy(alpha = 0.05f))
                             .padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -253,15 +261,15 @@ fun ChecklistEditorScreen(
                                 checklistItems[index] = item.copy(isChecked = isChecked)
                             },
                             colors = CheckboxDefaults.colors(
-                                checkedColor = Color.Black.copy(alpha = 0.8f),
-                                uncheckedColor = Color.Black.copy(alpha = 0.4f),
-                                checkmarkColor = getNoteColor(colorCode)
+                                checkedColor = getDarkNoteAccentColor(colorCode),
+                                uncheckedColor = DarkOnSurfaceVariant.copy(alpha = 0.6f),
+                                checkmarkColor = DarkSurface
                             )
                         )
                         Text(
                             text = item.text,
                             style = MaterialTheme.typography.bodyLarge,
-                            color = Color.Black,
+                            color = DarkOnSurface,
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(horizontal = 8.dp)
@@ -270,7 +278,7 @@ fun ChecklistEditorScreen(
                             Icon(
                                 imageVector = Icons.Default.Delete,
                                 contentDescription = "Remove Item",
-                                tint = Color.Black.copy(alpha = 0.5f)
+                                tint = DarkOnSurfaceVariant.copy(alpha = 0.6f)
                             )
                         }
                     }

@@ -26,6 +26,10 @@ import com.strategy.note.data.Note
 import com.strategy.note.data.NoteType
 import com.strategy.note.ui.theme.NoteColors
 import com.strategy.note.ui.theme.getNoteColor
+import com.strategy.note.ui.theme.getDarkNoteCardColor
+import com.strategy.note.ui.theme.getDarkNoteAccentColor
+import com.strategy.note.ui.theme.DarkOnSurface
+import com.strategy.note.ui.theme.DarkOnSurfaceVariant
 import com.strategy.note.viewmodel.NoteViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -117,7 +121,7 @@ fun TextEditorScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = getNoteColor(colorCode)
+                    containerColor = getDarkNoteCardColor(colorCode)
                 )
             )
         }
@@ -126,7 +130,7 @@ fun TextEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(getNoteColor(colorCode))
+                .background(getDarkNoteCardColor(colorCode))
                 .padding(16.dp)
         ) {
             if (reminderTime != null) {
@@ -135,7 +139,7 @@ fun TextEditorScreen(
                         .fillMaxWidth()
                         .padding(bottom = 8.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.05f))
+                        .background(Color.White.copy(alpha = 0.05f))
                         .padding(8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -148,12 +152,12 @@ fun TextEditorScreen(
                             imageVector = Icons.Default.NotificationsActive,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
-                            tint = Color.Black.copy(alpha = 0.6f)
+                            tint = getDarkNoteAccentColor(colorCode).copy(alpha = 0.7f)
                         )
                         Text(
                             text = "Reminder: " + SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()).format(Date(reminderTime!!)),
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Black.copy(alpha = 0.7f)
+                            color = DarkOnSurface.copy(alpha = 0.8f)
                         )
                     }
                     IconButton(
@@ -163,7 +167,7 @@ fun TextEditorScreen(
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Cancel Reminder",
-                            tint = Color.Black.copy(alpha = 0.6f),
+                            tint = getDarkNoteAccentColor(colorCode).copy(alpha = 0.7f),
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -173,9 +177,9 @@ fun TextEditorScreen(
             TextField(
                 value = title,
                 onValueChange = { title = it },
-                placeholder = { Text(stringResource(R.string.title_hint), color = Color.Black.copy(alpha = 0.4f)) },
+                placeholder = { Text(stringResource(R.string.title_hint), color = DarkOnSurfaceVariant.copy(alpha = 0.5f)) },
                 modifier = Modifier.fillMaxWidth(),
-                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.Black),
+                textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = getDarkNoteAccentColor(colorCode)),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -189,11 +193,11 @@ fun TextEditorScreen(
             TextField(
                 value = content,
                 onValueChange = { content = it },
-                placeholder = { Text(stringResource(R.string.content_hint), color = Color.Black.copy(alpha = 0.4f)) },
+                placeholder = { Text(stringResource(R.string.content_hint), color = DarkOnSurfaceVariant.copy(alpha = 0.5f)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color.Black),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = DarkOnSurface),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
